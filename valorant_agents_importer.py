@@ -24,7 +24,7 @@ from bpy.types import Operator
 
 meta_rig = "metarig"
 rigify_rig = "rig"
-src_model_name = None
+src_skeleton_name = None
 
 def edit_rig(rig_name):
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -38,18 +38,18 @@ def edit_rig(rig_name):
 class SETUP_CONFIG(Operator):
     bl_idname = "object.setup_config"
     bl_label = "Setup Config"
-    bl_description = bl_label
+    bl_description = "setup bone map by model type."
 
     @classmethod
     def poll(cls, context):
         return True
 
     def execute(self, context):
-        global src_model_name
+        global src_skeleton_name
         global src_bone_to_rigify
         global metarig_to_src_bone
 
-        src_model_name = context.scene.QueryProps.model_name
+        src_skeleton_name = context.scene.QueryProps.skeleton_name
     
         if context.scene.QueryProps.model_type == 'tp' :
             src_bone_to_rigify = src_bone_to_rigify_tp
@@ -64,8 +64,9 @@ class SETUP_CONFIG(Operator):
         return {'FINISHED'}
 
 def clean_bone_layer():
+    # todo: bone no layers attribute in 4.0.0
     # move unused bone to the last layer
-    model_obj = bpy.data.objects[src_model_name]
+    model_obj = bpy.data.objects[src_skeleton_name]
     model_obj.select_set(state = True)
     bpy.context.view_layer.objects.active = model_obj
     
@@ -77,7 +78,7 @@ def clean_bone_layer():
     print("seperate bone layer done!")
 
 def apply_model_transform(import_args):
-    model_obj = bpy.data.objects[src_model_name]
+    model_obj = bpy.data.objects[src_skeleton_name]
     model_obj.select_set(state = True)
     bpy.context.view_layer.objects.active = model_obj
     bpy.ops.object.mode_set(mode = 'OBJECT')
@@ -98,8 +99,8 @@ def apply_model_transform(import_args):
 
 def fix_bone_for_cascadeur():
     # reparent spine1 to Pelvis
-    edit_rig(src_model_name)
-    edit_bones = bpy.data.objects[src_model_name].data.edit_bones
+    edit_rig(src_skeleton_name)
+    edit_bones = bpy.data.objects[src_skeleton_name].data.edit_bones
     edit_bones['Spine1'].parent = edit_bones['Pelvis']
 
     offset = 0.05
@@ -122,7 +123,7 @@ def fix_bone_for_cascadeur():
 class SETUP_SOURCE_MODEL(Operator):
     bl_idname = "object.setup_source_model"
     bl_label = "Setup Source Model"
-    bl_description = bl_label
+    bl_description = "1.clean bone layer \n2.apply bone transform \n3.fix bone tail pos for cascadeur"
 
     @classmethod
     def poll(cls, context):
@@ -130,7 +131,7 @@ class SETUP_SOURCE_MODEL(Operator):
 
     def execute(self, context):
         import_args = context.scene.QueryProps.import_args
-        clean_bone_layer()
+        # clean_bone_layer()
         apply_model_transform(import_args)
         fix_bone_for_cascadeur()
         bpy.ops.object.mode_set(mode = 'OBJECT')
@@ -145,9 +146,9 @@ def create_metarig():
 def copy_src_bone_to_metarig():
     src_bone_data = {}
     meta_bone_data = {}
-    edit_rig(src_model_name)
+    edit_rig(src_skeleton_name)
     # save source model bone data
-    for bone in bpy.data.objects[src_model_name].data.edit_bones:
+    for bone in bpy.data.objects[src_skeleton_name].data.edit_bones:
         if bone.name not in metarig_to_src_bone.values():
             continue
 
@@ -202,7 +203,7 @@ def copy_src_bone_to_metarig():
 class SETUP_METARIG(Operator):
     bl_idname = "object.setup_metarig"
     bl_label = "Setup Metarig"
-    bl_description = bl_label
+    bl_description = "create meta rig and copy valorant rest pose to meta rig."
 
     @classmethod
     def poll(cls, context):
@@ -225,13 +226,16 @@ def fix_fp_bones(dir, all_bones):
 class FIX_FP_BONE(Operator):
     bl_idname = "object.fix_fp_bone"
     bl_label = "Fix FP Bone"
-    bl_description = "Fix FP Bone"
+    bl_description = "Just click, it's ok."
 
     @classmethod
     def poll(cls, context):
         return True
 
     def execute(self, context):
+        if context.scene.QueryProps.model_type == 'tp' :
+            return
+
         edit_rig(meta_rig)
         all_bones = bpy.data.objects[meta_rig].data.edit_bones
 
@@ -269,13 +273,16 @@ def fix_tp_bones(dir, all_bones):
 class FIX_TP_BONE(Operator):
     bl_idname = "object.fix_tp_bone"
     bl_label = "Fix TP Bone"
-    bl_description = "Fix TP Bone"
+    bl_description = "Just click, it's ok."
 
     @classmethod
     def poll(cls, context):
         return True
 
     def execute(self, context):
+        if context.scene.QueryProps.model_type == 'fp' :
+            return
+        
         edit_rig(meta_rig)
         all_bones = bpy.data.objects[meta_rig].data.edit_bones
 
@@ -296,8 +303,8 @@ def copy_rigify_to_src_bone():
             continue
         rigify_bone_data[bone.name] = (bone.head.copy(), bone.tail.copy(), bone.roll)
 
-    edit_rig(src_model_name)
-    for bone in bpy.data.objects[src_model_name].data.edit_bones:
+    edit_rig(src_skeleton_name)
+    for bone in bpy.data.objects[src_skeleton_name].data.edit_bones:
         if bone.name not in src_bone_to_rigify.keys():
             continue
         bone.head, bone.tail, bone.roll = rigify_bone_data[src_bone_to_rigify[bone.name]]
@@ -307,7 +314,7 @@ def copy_rigify_to_src_bone():
     return {'FINISHED'}
 
 def src_bone_add_constraints():
-    bpy.context.view_layer.objects.active = bpy.data.objects[src_model_name]
+    bpy.context.view_layer.objects.active = bpy.data.objects[src_skeleton_name]
     bpy.ops.object.mode_set(mode = 'POSE')
     bpy.ops.pose.select_all(action = 'SELECT')
     all_select_bones = bpy.context.selected_pose_bones
@@ -327,7 +334,7 @@ def src_bone_add_constraints():
 class SETUP_RIGIFY(Operator):
     bl_idname = "object.setup_rigify"
     bl_label = "Setup Rigify"
-    bl_description = bl_label
+    bl_description = "bind source bone to rigify bone"
 
     @classmethod
     def poll(cls, context):

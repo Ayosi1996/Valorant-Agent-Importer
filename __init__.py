@@ -2,7 +2,7 @@ bl_info = {
     "name" : "Valorant Agents Importer",
     "author" : "sqrt9",
     "description" : "",
-    "blender" : (3, 6, 0),
+    "blender" : (4, 0, 0),
     "version" : (0, 0, 1),
     "location" : "View3D",
     "warning" : "",
